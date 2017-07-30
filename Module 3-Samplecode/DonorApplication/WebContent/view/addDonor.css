@@ -1,0 +1,14 @@
+@CHARSET "ISO-8859-1";
+@CHARSET "ISO-8859-1";
+.err
+	{
+		font-family: Arial;
+		font-size: 11px;
+		color: red;
+		font-weight: bold;
+		text-align: left;
+	}
+	.tab
+	{
+	background-color: #FFE4E1;
+	}

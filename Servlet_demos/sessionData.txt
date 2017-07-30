@@ -1,0 +1,217 @@
+import java.io.*;
+import java.util.*;
+import javax.servlet.*;
+import javax.servlet.http.*;
+
+public class ManualInvalidate extends HttpServlet {
+
+  public void doGet(HttpServletRequest req, HttpServletResponse res)
+                               throws ServletException, IOException {
+    res.setContentType("text/html");
+    PrintWriter out = res.getWriter();
+
+    // Get the current session object, create one if necessary
+    HttpSession session = req.getSession(true);
+
+    // Invalidate the session if it's more than a day old or has been
+    // inactive for more than an hour.
+    if (!session.isNew()) {  // skip new sessions
+      Date dayAgo = new Date(System.currentTimeMillis() - 24*60*60*1000);
+      Date hourAgo = new Date(System.currentTimeMillis() - 60*60*1000);
+      Date created = new Date(session.getCreationTime());
+      Date accessed = new Date(session.getLastAccessedTime());
+
+      if (created.before(dayAgo) || accessed.before(hourAgo)) {
+        session.invalidate();
+        session = req.getSession(true);  // get a new session
+      }
+    }
+
+    // Continue processing...
+  }
+}
+
+import java.io.*;
+import java.util.*;
+import javax.servlet.*;
+import javax.servlet.http.*;
+
+public class ManualInvalidateScan extends HttpServlet {
+
+  public void doGet(HttpServletRequest req, HttpServletResponse res)
+                               throws ServletException, IOException {
+    res.setContentType("text/plain");
+    PrintWriter out = res.getWriter();
+
+    // Get the current session object, create one if necessary
+    HttpSession dummySession = req.getSession(true);
+
+    // Use the session to get the session context
+    HttpSessionContext context = dummySession.getSessionContext();
+
+    // Use the session context to get a list of session IDs
+    Enumeration ids = context.getIds();
+
+    // Iterate over the session IDs checking for stale sessions
+    while (ids.hasMoreElements()) {
+      String id = (String)ids.nextElement();
+      out.println("Checking " + id + "...");
+      HttpSession session = context.getSession(id);
+
+      // Invalidate the session if it's more than a day old or has been
+      // inactive for more than an hour.
+      Date dayAgo = new Date(System.currentTimeMillis() - 24*60*60*1000);
+      Date hourAgo = new Date(System.currentTimeMillis() - 60*60*1000);
+      Date created = new Date(session.getCreationTime());
+      Date accessed = new Date(session.getLastAccessedTime());
+
+      if (created.before(dayAgo)) {
+        out.println("More than a day old, invalidated!");
+        session.invalidate();
+      }
+      else if (accessed.before(hourAgo)) {
+        out.println("More than an hour inactive, invalidated!");
+        session.invalidate();
+      }
+      else {
+        out.println("Still valid.");
+      }
+      out.println();
+    }
+  }
+}
+
+Snooping session information
+
+import java.io.*;
+import java.util.*;
+import javax.servlet.*;
+import javax.servlet.http.*;
+
+public class SessionSnoop extends HttpServlet {
+
+  public void doGet(HttpServletRequest req, HttpServletResponse res)
+                               throws ServletException, IOException {
+    res.setContentType("text/html");
+    PrintWriter out = res.getWriter();
+
+    // Get the current session object, create one if necessary
+    HttpSession session = req.getSession(true);
+
+    // Increment the hit count for this page. The value is saved
+    // in this client's session under the name "snoop.count".
+    Integer count = (Integer)session.getValue("snoop.count");
+    if (count == null)
+      count = new Integer(1);
+    else
+      count = new Integer(count.intValue() + 1);
+    session.putValue("snoop.count", count);
+
+    out.println("<HTML><HEAD><TITLE>SessionSnoop</TITLE></HEAD>");
+    out.println("<BODY><H1>Session Snoop</H1>");
+
+    // Display the hit count for this page
+    out.println("You've visited this page " + count +
+      ((count.intValue() == 1) ? " time." : " times."));
+
+    out.println("<P>");
+
+    out.println("<H3>Here is your saved session data:</H3>");
+    String[] names = session.getValueNames();
+    for (int i = 0; i < names.length; i++) {
+      out.println(names[i] + ": " + session.getValue(names[i]) + "<BR>");
+    }
+
+    out.println("<H3>Here are some vital stats on your session:</H3>");
+    out.println("Session id: " + session.getId() + "<BR>");
+    out.println("New session: " + session.isNew() + "<BR>");
+    out.println("Creation time: " + session.getCreationTime());
+    out.println("<I>(" + new Date(session.getCreationTime()) + ")</I><BR>");
+    out.println("Last access time: " + session.getLastAccessedTime());
+    out.println("<I>(" + new Date(session.getLastAccessedTime()) +
+                ")</I><BR>");
+
+    out.println("Requested session ID from cookie: " +
+                req.isRequestedSessionIdFromCookie() + "<BR>");
+    out.println("Requested session ID from URL: " +
+                req.isRequestedSessionIdFromUrl() + "<BR>");
+    out.println("Requested session ID valid: " +
+                 req.isRequestedSessionIdValid() + "<BR>");
+
+    out.println("<H3>Here are all the current session IDs");
+    out.println("and the times they've hit this page:</H3>");
+    HttpSessionContext context = session.getSessionContext();
+    Enumeration ids = context.getIds();
+    while (ids.hasMoreElements()) {
+      String id = (String)ids.nextElement();
+      out.println(id + ": ");
+      HttpSession foreignSession = context.getSession(id);
+      Integer foreignCount =
+        (Integer)foreignSession.getValue("snoop.count");
+      if (foreignCount == null)
+        out.println(0);
+      else
+        out.println(foreignCount.toString());
+      out.println("<BR>");
+    }
+
+    out.println("<H3>Test URL Rewriting</H3>");
+    out.println("Click <A HREF=\"" +
+                res.encodeUrl(req.getRequestURI()) + "\">here</A>");
+    out.println("to test that session tracking works via URL");
+    out.println("rewriting even when cookies aren't supported.");
+
+    out.println("</BODY></HTML>");
+  }
+}
+
+Using the session tracking API
+
+import java.io.*;
+import javax.servlet.*;
+import javax.servlet.http.*;
+
+public class ShoppingCartViewerSession extends HttpServlet {
+
+  public void doGet(HttpServletRequest req, HttpServletResponse res)
+                               throws ServletException, IOException {
+    res.setContentType("text/html");
+    PrintWriter out = res.getWriter();
+
+    // Get the current session object, create one if necessary.
+    HttpSession session = req.getSession(true);
+
+    // Cart items are maintained in the session object.
+    String[] items = (String[])session.getValue("cart.items");
+
+    out.println("<HTML><HEAD><TITLE>SessionTracker</TITLE></HEAD>");
+    out.println("<BODY><H1>Session Tracking Demo</H1>");
+
+    // Print the current cart items.
+    out.println("You currently have the following items in your cart:<BR>");
+    if (items == null) {
+      out.println("<B>None</B>");
+    }
+    else {
+      out.println("<UL>");
+      for (int i = 0; i < items.length; i++) {
+        out.println("<LI>" + items[i]);
+      }
+      out.println("</UL>");
+    }
+
+    // Ask if they want to add more items or check out.
+    out.println("<FORM ACTION=\"/servlet/ShoppingCart\" METHOD=POST>");
+    out.println("Would you like to<BR>");
+    out.println("<INPUT TYPE=submit VALUE=\" Add More Items \">");
+    out.println("<INPUT TYPE=submit VALUE=\" Check Out \">");
+    out.println("</FORM>");
+
+    // Offer a help page. Encode it as necessary.
+    out.println("For help, click <A HREF=\"" +
+                res.encodeUrl("/servlet/Help?topic=ShoppingCartViewer") +
+                "\">here</A>");
+
+    out.println("</BODY></HTML>");
+  }
+}
